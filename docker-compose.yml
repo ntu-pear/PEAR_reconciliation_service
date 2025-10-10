@@ -1,0 +1,47 @@
+version: '3.8'
+
+services:
+  reconciliation-service:
+    build: .
+    ports:
+      - "8080:8000"
+      - "9090:9090"  # Metrics port
+    environment:
+      - ACTIVITY_SERVICE_URL=http://activity-service:8000
+      - PATIENT_SERVICE_URL=http://patient-service:8000
+      - SCHEDULER_SERVICE_URL=http://scheduler-service:8000
+      - RABBITMQ_URL=amqp://admin:password@rabbitmq:5672/vhost
+      - LOG_LEVEL=INFO
+      - DEBUG=false
+    depends_on:
+      - rabbitmq
+    networks:
+      - pear-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+  rabbitmq:
+    image: rabbitmq:3.12-management
+    ports:
+      - "5672:5672"
+      - "15672:15672"
+    environment:
+      RABBITMQ_DEFAULT_USER: admin
+      RABBITMQ_DEFAULT_PASS: password
+      RABBITMQ_DEFAULT_VHOST: vhost
+    networks:
+      - pear-network
+    volumes:
+      - rabbitmq_data:/var/lib/rabbitmq
+
+networks:
+  pear-network:
+    external: true
+
+volumes:
+  rabbitmq_data:
