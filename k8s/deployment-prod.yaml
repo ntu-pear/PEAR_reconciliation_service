@@ -1,0 +1,169 @@
+apiVersion: v1
+kind: Secret
+metadata:
+  name: reconciliation-secrets-prod
+  namespace: default
+type: Opaque
+stringData:
+  activity-service-url: ""  # Will be populated from GitHub secrets
+  patient-service-url: ""   # Will be populated from GitHub secrets
+  scheduler-service-url: ""  # Will be populated from GitHub secrets
+  rabbitmq-url: ""          # Will be populated from GitHub secrets
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: reconciliation-config-prod
+  namespace: default
+data:
+  # Reconciliation Configuration
+  RECONCILIATION_SCHEDULE: "55 * * * *"  # Every hour
+  
+  # Logging Configuration
+  LOG_LEVEL: "INFO"
+  LOG_FORMAT: "json"
+  
+  # Service Configuration
+  SERVICE_NAME: "reconciliation-service"
+  SERVICE_VERSION: "1.0.0"
+  PORT: "8000"
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: reconciliation-service-prod
+  namespace: default
+  labels:
+    app: reconciliation-prod
+spec:
+  type: ClusterIP
+  ports:
+  - name: http
+    port: 8000
+    targetPort: 8000
+    protocol: TCP
+  selector:
+    app: reconciliation-prod
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: reconciliation-prod
+  namespace: default
+  labels:
+    app: reconciliation-prod
+    environment: production
+spec:
+  replicas: 1  # Single instance for scheduled jobs
+  selector:
+    matchLabels:
+      app: reconciliation-prod
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 0
+  template:
+    metadata:
+      labels:
+        app: reconciliation-prod
+        environment: production
+    spec:
+      containers:
+      - name: reconciliation
+        image: localhost:5000/reconciliation_service_prod:latest
+        imagePullPolicy: Always
+        ports:
+        - name: http
+          containerPort: 8000
+          protocol: TCP
+        env:
+        # Load sensitive URLs from Secret
+        - name: ACTIVITY_SERVICE_URL
+          valueFrom:
+            secretKeyRef:
+              name: reconciliation-secrets-prod
+              key: activity-service-url
+        - name: PATIENT_SERVICE_URL
+          valueFrom:
+            secretKeyRef:
+              name: reconciliation-secrets-prod
+              key: patient-service-url
+        - name: SCHEDULER_SERVICE_URL
+          valueFrom:
+            secretKeyRef:
+              name: reconciliation-secrets-prod
+              key: scheduler-service-url
+        - name: RABBITMQ_URL
+          valueFrom:
+            secretKeyRef:
+              name: reconciliation-secrets-prod
+              key: rabbitmq-url
+        
+        # Load from ConfigMap
+        - name: RECONCILIATION_SCHEDULE
+          valueFrom:
+            configMapKeyRef:
+              name: reconciliation-config-prod
+              key: RECONCILIATION_SCHEDULE
+        - name: LOG_LEVEL
+          valueFrom:
+            configMapKeyRef:
+              name: reconciliation-config-prod
+              key: LOG_LEVEL
+        - name: SERVICE_NAME
+          valueFrom:
+            configMapKeyRef:
+              name: reconciliation-config-prod
+              key: SERVICE_NAME
+        - name: PORT
+          valueFrom:
+            configMapKeyRef:
+              name: reconciliation-config-prod
+              key: PORT
+        
+        livenessProbe:
+          httpGet:
+            path: /health
+            port: 8000
+          initialDelaySeconds: 60
+          periodSeconds: 30
+          timeoutSeconds: 10
+          failureThreshold: 3
+          successThreshold: 1
+        readinessProbe:
+          httpGet:
+            path: /health
+            port: 8000
+          initialDelaySeconds: 20
+          periodSeconds: 10
+          timeoutSeconds: 5
+          failureThreshold: 3
+          successThreshold: 1
+        resources:
+          requests:
+            cpu: 200m
+            memory: 512Mi
+          limits:
+            cpu: 1000m
+            memory: 1Gi
+        securityContext:
+          allowPrivilegeEscalation: false
+          runAsNonRoot: true
+          runAsUser: 1000
+          capabilities:
+            drop:
+            - ALL
+      restartPolicy: Always
+      terminationGracePeriodSeconds: 30
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: reconciliation-prod-pdb
+  namespace: default
+spec:
+  minAvailable: 1
+  selector:
+    matchLabels:
+      app: reconciliation-prod

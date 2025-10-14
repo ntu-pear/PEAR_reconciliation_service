@@ -30,7 +30,7 @@ class Settings(BaseSettings):
     RABBITMQ_VIRTUAL_HOST: Optional[str] = Field(default=None, description="RabbitMQ virtual host (optional)")
     
     # Reconciliation Configuration
-    RECONCILIATION_SCHEDULE: str = Field(default="0 * * * *", description="Cron expression for reconciliation schedule")
+    RECONCILIATION_SCHEDULE: str = Field(default="55 * * * *", description="Cron expression for reconciliation schedule")
     RECONCILIATION_WINDOW_HOURS: int = Field(default=1, description="Default time window for reconciliation")
     RECONCILIATION_TIMEOUT_SECONDS: int = Field(default=30, description="Timeout for service calls")
     MAX_RECORDS_PER_REQUEST: int = Field(default=1000, description="Maximum records per integrity request")
