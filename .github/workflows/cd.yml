@@ -1,3 +1,6 @@
+# This workflow will build and deploy the PEAR Reconciliation Service to Production
+# For more information see: https://docs.github.com/en/actions/automating-builds-and-tests/building-and-testing-python
+
 name: Reconciliation Service CD
 
 on:
@@ -8,8 +11,22 @@ permissions:
   contents: read
 
 jobs:
-  deploy-production:
-    if: github.ref == 'refs/heads/main'
+  precheck:
+    runs-on: [self-hosted, Linux, X64]
+    steps:
+      - name: Check kubectl permissions
+        run: |
+          echo "Checking Kubernetes permissions..."
+          kubectl auth can-i delete deployments || (echo "No permission to delete deployments" && exit 1)
+          kubectl auth can-i create deployments || (echo "No permission to create deployments" && exit 1)
+      
+      - name: Check Docker registry access
+        run: |
+          echo "Checking Docker registry access..."
+          docker info || (echo "Docker not accessible" && exit 1)
+
+  deploy:
+    needs: precheck
     runs-on: [self-hosted, Linux, X64]
     
     steps:
@@ -17,65 +34,93 @@ jobs:
         with:
           ref: main
       
+      - name: Print working directory
+        run: |
+          pwd
+          ls -la
+          git status
+      
       - name: Pre-deployment setup
         run: |
-          echo "Starting Reconciliation Service deployment to PRODUCTION"
+          echo "🚀 Starting Reconciliation Service deployment to PRODUCTION"
           echo "Current time: $(date)"
           echo "Git commit: ${{ github.sha }}"
       
-      - name: Build and push new image
+      - name: Create secret.yaml from GitHub Secrets
+        run: |
+          echo "Creating secret.yaml from GitHub secrets..."
+          
+          # Encode secrets to base64
+          ACTIVITY_URL_B64=$(echo -n "${{ secrets.ACTIVITY_SERVICE_URL }}" | base64 -w 0)
+          PATIENT_URL_B64=$(echo -n "${{ secrets.PATIENT_SERVICE_URL }}" | base64 -w 0)
+          SCHEDULER_URL_B64=$(echo -n "${{ secrets.SCHEDULER_SERVICE_URL }}" | base64 -w 0)
+          RABBITMQ_URL_B64=$(echo -n "${{ secrets.RABBITMQ_URL }}" | base64 -w 0)
+          
+          # Create secret.yaml with encoded values
+          cat > ./k8s/secret.yaml << EOF
+          apiVersion: v1
+          kind: Secret
+          metadata:
+            name: reconciliation-secret
+          type: Opaque
+          data:
+            ACTIVITY_SERVICE_URL: ${ACTIVITY_URL_B64}
+            PATIENT_SERVICE_URL: ${PATIENT_URL_B64}
+            SCHEDULER_SERVICE_URL: ${SCHEDULER_URL_B64}
+            RABBITMQ_URL: ${RABBITMQ_URL_B64}
+          EOF
+          
+          echo "✅ secret.yaml created with encoded values"
+      
+      - name: Apply Kubernetes ConfigMap and Secret
+        run: |
+          echo "Applying ConfigMap and Secret..."
+          kubectl apply -f './k8s/configmap.yaml'
+          kubectl apply -f './k8s/secret.yaml'
+          echo "✅ ConfigMap and Secret applied"
+      
+      - name: Delete old deployment
+        run: |
+          echo "Deleting old deployment..."
+          kubectl delete deployment.apps/reconciliation-prod service/reconciliation-service-prod --ignore-not-found=true
+          echo "✅ Old deployment deleted"
+      
+      - name: Delete old docker images
+        run: |
+          echo "Deleting old Docker images..."
+          docker rmi reconciliation_service_prod --force || true
+          docker rmi localhost:5000/reconciliation_service_prod --force || true
+          echo "✅ Old images deleted"
+      
+      - name: Build Docker image
         run: |
           echo "🔨 Building new Reconciliation Service image..."
           docker build --no-cache -f Dockerfile -t reconciliation_service_prod .
+          echo "✅ Image built"
+      
+      - name: Tag Docker image
+        run: |
+          echo "Tagging Docker image..."
           docker tag reconciliation_service_prod:latest localhost:5000/reconciliation_service_prod:latest
+          echo "✅ Image tagged"
+      
+      - name: Push Docker image to local registry
+        run: |
+          echo "Pushing Docker image to localhost:5000..."
           docker push localhost:5000/reconciliation_service_prod:latest
-          echo "Image built and pushed successfully"
+          echo "✅ Image pushed successfully"
           sleep 5
       
-      - name: Create/Update Kubernetes Secret from GitHub Secrets
+      - name: Deploying to Kubernetes
         run: |
-          echo "Creating Kubernetes secret from GitHub repository secrets..."
-          
-          # Delete existing secret if it exists (ignore errors if it doesn't)
-          kubectl delete secret reconciliation-secrets-prod --ignore-not-found=true
-          
-          # Create new secret from GitHub secrets
-          kubectl create secret generic reconciliation-secrets-prod \
-            --from-literal=activity-service-url='${{ secrets.ACTIVITY_SERVICE_URL }}' \
-            --from-literal=patient-service-url='${{ secrets.PATIENT_SERVICE_URL }}' \
-            --from-literal=scheduler-service-url='${{ secrets.SCHEDULER_SERVICE_URL }}' \
-            --from-literal=rabbitmq-url='${{ secrets.RABBITMQ_URL }}'
-          
-          echo "Kubernetes secret created successfully"
-      
-      - name: Deploy or update service
-        run: |
-          echo "Deploying Reconciliation Service to PRODUCTION..."
-          
-          if kubectl get deployment reconciliation-prod &> /dev/null; then
-            echo "Existing deployment found - performing rolling update"
-            
-            # Apply the latest configuration (ConfigMap, Service, etc.)
-            kubectl apply -f k8s/deployment-prod.yaml
-            
-            # Force a rolling update by updating image and restart annotation
-            kubectl set image deployment/reconciliation-prod reconciliation=host.minikube.internal:5000/reconciliation_service_prod:latest
-            kubectl patch deployment reconciliation-prod -p "{\"spec\":{\"template\":{\"metadata\":{\"annotations\":{\"kubectl.kubernetes.io/restartedAt\":\"$(date -Is)\"}}}}}"
-            
-            echo "Rolling update initiated"
-            
-          else
-            echo "No existing deployment - deploying fresh"
-            kubectl apply -f k8s/deployment-prod.yaml
-          fi
+          echo "🔄 Deploying Reconciliation Service to PRODUCTION..."
+          kubectl apply -f './k8s/deployment-prod.yaml'
+          echo "✅ Deployment applied"
       
       - name: Monitor deployment
         run: |
           echo "⏳ Monitoring deployment progress..."
-          
-          # Wait for deployment to complete
           kubectl rollout status deployment/reconciliation-prod --timeout=300s
-          
           echo "✅ Deployment completed"
       
       - name: Verify deployment
@@ -90,7 +135,6 @@ jobs:
           kubectl get pods -l app=reconciliation-prod
           
           echo "🏥 Checking service health..."
-          # Give the service a moment to fully initialize
           sleep 10
           
           # Get the pod name
@@ -120,10 +164,6 @@ jobs:
           echo "  - Image: host.minikube.internal:5000/reconciliation_service_prod:latest"
           echo "  - Commit: ${{ github.sha }}"
           echo "  - Deployed at: $(date)"
-          
-          echo ""
-          echo "🔐 Secrets Status:"
-          kubectl get secret reconciliation-secrets-prod -o jsonpath='{.data}' | jq 'keys'
       
       - name: Post-deployment
         if: always()
