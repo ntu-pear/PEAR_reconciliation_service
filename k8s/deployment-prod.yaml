@@ -157,13 +157,20 @@ spec:
       restartPolicy: Always
       terminationGracePeriodSeconds: 30
 ---
-apiVersion: policy/v1
-kind: PodDisruptionBudget
+apiVersion: v1
+kind: Service
 metadata:
-  name: reconciliation-prod-pdb
+  name: reconciliation-service-prod-nodeport
   namespace: default
+  labels:
+    app: reconciliation-prod
 spec:
-  minAvailable: 1
+  type: NodePort
+  ports:
+  - name: http
+    port: 8000
+    targetPort: 8000
+    nodePort: 30800  # External access on port 30800
+    protocol: TCP
   selector:
-    matchLabels:
-      app: reconciliation-prod
+    app: reconciliation-prod
