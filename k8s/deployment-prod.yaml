@@ -17,7 +17,7 @@ metadata:
   namespace: default
 data:
   # Reconciliation Configuration
-  RECONCILIATION_SCHEDULE: "55 * * * *"  # Every hour
+  RECONCILIATION_SCHEDULE: "0 * * * *"  # Every hour
   
   # Logging Configuration
   LOG_LEVEL: "INFO"
@@ -71,7 +71,7 @@ spec:
     spec:
       containers:
       - name: reconciliation
-        image: localhost:5000/reconciliation_service_prod:latest
+        image: host.minikube.internal:5000/reconciliation_service_prod:latest
         imagePullPolicy: Always
         ports:
         - name: http
