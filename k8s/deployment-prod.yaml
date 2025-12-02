@@ -29,6 +29,9 @@ spec:
         - name: http
           containerPort: 8000
           protocol: TCP
+        env:
+        - name: TZ
+          value: "Asia/Singapore"  # GMT+8 timezone
         envFrom:
         - configMapRef:
             name: reconciliation-config
