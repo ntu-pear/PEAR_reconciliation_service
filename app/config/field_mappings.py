@@ -1,6 +1,6 @@
 from dataclasses import dataclass
-from typing import Dict, Any
 from enum import Enum
+from typing import Any, Dict
 
 
 class ServiceType(str, Enum):
@@ -16,6 +16,7 @@ class RecordType(str, Enum):
     CENTRE_ACTIVITY_EXCLUSION = "centre_activity_exclusion"
     PATIENT = "patient"
     PATIENT_MEDICATION = "patient_medication"
+    PATIENT_ALLOCATION="patient_allocation"
 
 
 @dataclass
@@ -85,6 +86,14 @@ FIELD_MAPPINGS = {
         eventual_endpoint="/integrity/ref-patient-medication",
         id_field_mapping={"MedicationID": "Id", "PatientID": "PatientId"},
         timestamp_field_mapping={"UpdatedDateTime": "UpdatedDateTime"}
+    ),
+    
+    RecordType.PATIENT_ALLOCATION: ServiceMapping(
+        record_type=RecordType.PATIENT_ALLOCATION,
+        authoritative_endpoint="/integrity/patient-allocation",
+        eventual_endpoint="/integrity/ref-patient-allocation",
+        id_field_mapping={"PatientAllocationID": "id", "PatientID": "patient_id"},
+        timestamp_field_mapping={"modified_date": "modified_date"}
     )
 }
 
@@ -123,7 +132,9 @@ def get_authoritative_service_for_record_type(record_type: RecordType) -> str:
         RecordType.CENTRE_ACTIVITY_EXCLUSION
     ]:
         return "activity"
-    elif record_type in [RecordType.PATIENT, RecordType.PATIENT_MEDICATION]:
+    elif record_type in [RecordType.PATIENT, 
+                         RecordType.PATIENT_MEDICATION,
+                         RecordType.PATIENT_ALLOCATION]:
         return "patient"
     else:
         raise ValueError(f"Unknown record type: {record_type}")
