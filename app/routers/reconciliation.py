@@ -10,6 +10,12 @@ logger = logging.getLogger(__name__)
 
 router = APIRouter()
 
+# Shared singleton instance so job_history persists across all endpoints
+_reconciler = ReconcilerService()
+
+def get_reconciler() -> ReconcilerService:
+    return _reconciler
+
 
 @router.post("/run")
 async def run_reconciliation(
@@ -42,9 +48,9 @@ async def run_reconciliation(
                     detail=f"Invalid record types: {invalid_types}. Valid types: {valid_types}"
                 )
         
-        # Create reconciliation job
-        reconciler = ReconcilerService()
-        
+        # Use shared reconciler instance
+        reconciler = get_reconciler()
+
         # Run reconciliation in background
         job_id = f"manual_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
         
@@ -75,7 +81,7 @@ async def get_reconciliation_status():
     Get current reconciliation status and recent history.
     """
     try:
-        reconciler = ReconcilerService()
+        reconciler = get_reconciler()
         status = await reconciler.get_status()
         
         return {
@@ -100,7 +106,7 @@ async def get_reconciliation_history(
     Get reconciliation history for monitoring and analysis.
     """
     try:
-        reconciler = ReconcilerService()
+        reconciler = get_reconciler()
         history = await reconciler.get_history(limit=limit, days_back=days_back)
         
         return {
@@ -137,7 +143,7 @@ async def get_drift_details(
                 detail=f"Invalid record type: {record_type}"
             )
         
-        reconciler = ReconcilerService()
+        reconciler = get_reconciler()
         drift_details = await reconciler.get_drift_details(
             record_type=record_type,
             hours_back=hours_back,
@@ -180,8 +186,8 @@ async def resolve_drift(
         
         logger.info(f"Manual drift resolution triggered - type: {record_type}, id: {record_id}")
         
-        reconciler = ReconcilerService()
-        
+        reconciler = get_reconciler()
+
         # Create resolution job
         resolution_id = f"resolve_{record_type}_{record_id}_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
         
@@ -215,7 +221,7 @@ async def get_reconciliation_metrics():
     Get reconciliation metrics for monitoring and alerting.
     """
     try:
-        reconciler = ReconcilerService()
+        reconciler = get_reconciler()
         metrics = await reconciler.get_metrics()
         
         return {
@@ -237,7 +243,7 @@ async def get_reconciliation_config():
     Get current reconciliation configuration.
     """
     try:
-        reconciler = ReconcilerService()
+        reconciler = get_reconciler()
         config = reconciler.get_configuration()
         
         return {
