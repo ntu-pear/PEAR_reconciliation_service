@@ -18,6 +18,7 @@ class Settings(BaseSettings):
     ACTIVITY_SERVICE_URL: str = Field(default="http://localhost:8001", description="Activity service base URL")
     PATIENT_SERVICE_URL: str = Field(default="http://localhost:8002", description="Patient service base URL")
     SCHEDULER_SERVICE_URL: str = Field(default="http://localhost:8003", description="Scheduler service base URL")
+    USER_SERVICE_URL: str = Field(default="http://localhost:8004", description="User service base URL")
     
     # RabbitMQ Configuration
     RABBITMQ_URL: str = Field(default="amqp://admin:password@localhost:5672/vhost", description="RabbitMQ connection URL")
