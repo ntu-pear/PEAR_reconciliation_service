@@ -17,6 +17,7 @@ class RecordType(str, Enum):
     PATIENT = "patient"
     PATIENT_MEDICATION = "patient_medication"
     PATIENT_ALLOCATION="patient_allocation"
+    ADMIN_CONFIG = "admin_config"
 
 
 @dataclass
@@ -94,6 +95,14 @@ FIELD_MAPPINGS = {
         eventual_endpoint="/integrity/ref-patient-allocation",
         id_field_mapping={"PatientAllocationID": "id", "PatientID": "patient_id"},
         timestamp_field_mapping={"modified_date": "modified_date"}
+    ),
+
+    RecordType.ADMIN_CONFIG: ServiceMapping(
+        record_type=RecordType.ADMIN_CONFIG,
+        authoritative_endpoint="/integrity/adminconfig",
+        eventual_endpoint="/integrity/ref-userconfig",
+        id_field_mapping={"UserConfigID": "id"},
+        timestamp_field_mapping={"modified_date": "modified_date"}
     )
 }
 
@@ -118,6 +127,11 @@ def get_service_configs():
             "base_url": settings.SCHEDULER_SERVICE_URL,
             "service_type": ServiceType.EVENTUAL,
             "timeout": settings.RECONCILIATION_TIMEOUT_SECONDS
+        },
+        "user": {
+            "base_url": settings.USER_SERVICE_URL,
+            "service_type": ServiceType.AUTHORITATIVE,
+            "timeout": settings.RECONCILIATION_TIMEOUT_SECONDS
         }
     }
 
@@ -132,17 +146,21 @@ def get_authoritative_service_for_record_type(record_type: RecordType) -> str:
         RecordType.CENTRE_ACTIVITY_EXCLUSION
     ]:
         return "activity"
-    elif record_type in [RecordType.PATIENT, 
+    elif record_type in [RecordType.PATIENT,
                          RecordType.PATIENT_MEDICATION,
                          RecordType.PATIENT_ALLOCATION]:
         return "patient"
+    elif record_type == RecordType.ADMIN_CONFIG:
+        return "user"
     else:
         raise ValueError(f"Unknown record type: {record_type}")
 
 
 def get_eventual_service_for_record_type(record_type: RecordType) -> str:
     """Determine which service has eventual consistent data for a given record type"""
-    # For now, all eventual consistent data is in the scheduler service
+    if record_type == RecordType.ADMIN_CONFIG:
+        return "patient"
+    # All other eventual consistent data is in the scheduler service
     return "scheduler"
 
 
