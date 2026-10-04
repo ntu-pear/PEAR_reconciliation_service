@@ -15,6 +15,7 @@ class RecordType(str, Enum):
     CENTRE_ACTIVITY_RECOMMENDATION = "centre_activity_recommendation"
     CENTRE_ACTIVITY_EXCLUSION = "centre_activity_exclusion"
     ADHOC = "adhoc"
+    ROUTINE = "routine"
     PATIENT = "patient"
     PATIENT_MEDICATION = "patient_medication"
     PATIENT_ALLOCATION="patient_allocation"
@@ -79,6 +80,14 @@ FIELD_MAPPINGS = {
         authoritative_endpoint="/integrity/adhoc",
         eventual_endpoint="/integrity/ref-adhoc",
         id_field_mapping={"AdhocID": "id", "PatientID": "patient_id"},
+        timestamp_field_mapping={"UpdatedDateTime": "modified_date"}
+    ),
+
+    RecordType.ROUTINE: ServiceMapping(
+        record_type=RecordType.ROUTINE,
+        authoritative_endpoint="/integrity/routine",
+        eventual_endpoint="/integrity/ref-activity-routine",
+        id_field_mapping={"RoutineID": "id"},
         timestamp_field_mapping={"UpdatedDateTime": "modified_date"}
     ),
 
@@ -153,7 +162,8 @@ def get_authoritative_service_for_record_type(record_type: RecordType) -> str:
         RecordType.CENTRE_ACTIVITY_PREFERENCE, 
         RecordType.CENTRE_ACTIVITY_RECOMMENDATION,
         RecordType.CENTRE_ACTIVITY_EXCLUSION,
-        RecordType.ADHOC
+        RecordType.ADHOC,
+        RecordType.ROUTINE
     ]:
         return "activity"
     elif record_type in [RecordType.PATIENT,
