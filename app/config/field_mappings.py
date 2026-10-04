@@ -14,10 +14,11 @@ class RecordType(str, Enum):
     CENTRE_ACTIVITY_PREFERENCE = "centre_activity_preference"
     CENTRE_ACTIVITY_RECOMMENDATION = "centre_activity_recommendation"
     CENTRE_ACTIVITY_EXCLUSION = "centre_activity_exclusion"
+    ADHOC = "adhoc"
     PATIENT = "patient"
     PATIENT_MEDICATION = "patient_medication"
     PATIENT_ALLOCATION="patient_allocation"
-    ADMIN_CONFIG = "userconfig"  # must match the user service drift consumer handler key
+    ADMIN_CONFIG = "userconfig"
 
 
 @dataclass
@@ -72,7 +73,15 @@ FIELD_MAPPINGS = {
         id_field_mapping={"ActivityExclusionID": "id", "ActivityID": "centre_activity_id", "PatientID": "patient_id"},
         timestamp_field_mapping={"modified_date": "modified_date"}
     ),
-    
+
+    RecordType.ADHOC: ServiceMapping(
+        record_type=RecordType.ADHOC,
+        authoritative_endpoint="/integrity/adhoc",
+        eventual_endpoint="/integrity/ref-adhoc",
+        id_field_mapping={"AdhocID": "id", "PatientID": "patient_id"},
+        timestamp_field_mapping={"UpdatedDateTime": "modified_date"}
+    ),
+
     RecordType.PATIENT: ServiceMapping(
         record_type=RecordType.PATIENT,
         authoritative_endpoint="/integrity/patient",
@@ -143,7 +152,8 @@ def get_authoritative_service_for_record_type(record_type: RecordType) -> str:
         RecordType.CENTRE_ACTIVITY,
         RecordType.CENTRE_ACTIVITY_PREFERENCE, 
         RecordType.CENTRE_ACTIVITY_RECOMMENDATION,
-        RecordType.CENTRE_ACTIVITY_EXCLUSION
+        RecordType.CENTRE_ACTIVITY_EXCLUSION,
+        RecordType.ADHOC
     ]:
         return "activity"
     elif record_type in [RecordType.PATIENT,
