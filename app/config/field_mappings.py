@@ -17,7 +17,7 @@ class RecordType(str, Enum):
     PATIENT = "patient"
     PATIENT_MEDICATION = "patient_medication"
     PATIENT_ALLOCATION="patient_allocation"
-    ADMIN_CONFIG = "admin_config"
+    ADMIN_CONFIG = "userconfig"  # must match the user service drift consumer handler key
 
 
 @dataclass
