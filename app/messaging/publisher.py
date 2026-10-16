@@ -6,6 +6,7 @@ import uuid
 
 from .rabbitmq_client import RabbitMQClient
 from app.config.settings import get_settings
+from app.config.field_mappings import RecordType, get_authoritative_service_for_record_type
 
 logger = logging.getLogger(__name__)
 settings = get_settings()
@@ -70,13 +71,18 @@ class DriftPublisher:
             self.ensure_connected()
             
             correlation_id = correlation_id or f"{uuid.uuid4()}"
-            
-            # Routing key format: drift.detected.<record_type>.<record_id>
-            routing_key = f"drift.detected.{record_type}.{record_id}"
-            
+
+            # Each owning service has its own drift queue bound to drift.detected.<service>.#,
+            # so the owner goes in the key and only the service that can resync the record receives it.
+            service = get_authoritative_service_for_record_type(RecordType(record_type))
+
+            # Routing key format: drift.detected.<service>.<record_type>.<record_id>
+            routing_key = f"drift.detected.{service}.{record_type}.{record_id}"
+
             # Message payload
             message = {
                 "event_type": "DRIFT_DETECTED",
+                "service": service,
                 "record_type": record_type,
                 "record_id": record_id,
                 "correlation_id": correlation_id,
